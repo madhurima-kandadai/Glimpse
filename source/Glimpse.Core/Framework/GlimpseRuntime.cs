@@ -564,8 +564,43 @@ namespace Glimpse.Core.Framework
                 {
                     tabResultsStore.Add(key, result);
                 }
+                this.SaveGlimpseData(result);
             }
         }
+
+        /// <summary>
+        /// Saves the glimpse data.
+        /// </summary>
+        /// <param name="tabData">The tab data.</param>
+        private void SaveGlimpseData(TabResult tabData)
+        {
+            try
+            {
+                if (tabData.Name == "SQL" && tabData.Data != null)
+                { 
+                    var values = (List<object[]>)tabData.Data.CastOrDefault<Dictionary<string, object>>().Last().Value;
+                    foreach (var item in values)
+                    {
+                        if (item == values.First())
+                        {
+                            continue;
+                        }
+                        else
+                        {
+                            var data = item.FirstOrDefault().CastOrDefault<List<object[]>>();                            
+                            var s = (TimeSpan)data.Last().ElementAt(5);
+                            GlimpseSave.SaveGlimpseData("SQL", data.Last().ElementAt(2).ToString(), data.Last().ElementAt(3).ToStringOrDefault(), Convert.ToInt32(data.Last().ElementAt(4)), s.Milliseconds, data.Last().ElementAt(7).ToString(), data.Last().ElementAt(9).ToStringOrDefault());
+                        }
+                    }
+
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.Write(ex.Message);
+            }
+        }
+
 
         private void ExecuteDisplays()
         {

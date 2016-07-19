@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Configuration;
 using System.Linq;
 using Glimpse.Core.Extensibility;
 using Glimpse.Core.Extensions;
 using Glimpse.Core.Framework;
 using Glimpse.Core.ResourceResult;
+using MySql.Data.MySqlClient;
 
 namespace Glimpse.Core.Resource
 {
@@ -66,19 +68,45 @@ namespace Glimpse.Core.Resource
             {
                 throw new ArgumentNullException("context");
             }
-
             int top;
             int.TryParse(context.Parameters.GetValueOrDefault(TopKey, ifNotFound: "50"), out top);
-
             var data = context.PersistenceStore.GetTop(top);
-
             if (data == null)
             {
                 return new StatusCodeResourceResult(404, string.Format("No data found in top {0}.", top));
             }
-
             var requests = data.GroupBy(d => d.ClientId).ToDictionary(group => group.Key, group => group.Select(g => new GlimpseRequestHeaders(g)));
+            this.SaveGlimpseAjaxCalls(data);
             return new CacheControlDecorator(0, CacheSetting.NoCache, new JsonResourceResult(requests, context.Parameters.GetValueOrDefault(ResourceParameter.Callback.Name)));
+        }
+
+        /// <summary>
+        /// Saves the glimpse ajax calls.
+        /// </summary>
+        /// <param name="data">The context.</param>
+        private void SaveGlimpseAjaxCalls(IEnumerable<GlimpseRequest> data)
+        {
+            MySqlConnection connection;
+            MySqlCommand cmd = null;
+            string con = ConfigurationManager.ConnectionStrings["DefaultConnection"].ToString();
+            var value = data.Where(x => !x.RequestUri.Contains("glimpse")).ToList();
+            foreach (var item in value)
+            {
+                connection = new MySqlConnection(con);
+                cmd = new MySqlCommand();
+                cmd.Connection = connection;
+                connection.Open();
+                cmd.CommandText = "INSERT INTO transactions (Type,Duration, RequestHttpMethod, RequestIsAjax, RequestUri, ReponseContentType, ResponseStatusCode) VALUES (@Type, @Duration, @RequestHttpMethod, @RequestIsAjax, @RequestUri,@ReponseContentType, @ResponseStatusCode)";
+                cmd.Parameters.AddWithValue("@Type", "AJAX");
+                cmd.Parameters.AddWithValue("@Duration", item.Duration.Milliseconds);
+                cmd.Parameters.AddWithValue("@RequestHttpMethod", item.RequestHttpMethod);
+                cmd.Parameters.AddWithValue("@RequestIsAjax", item.RequestIsAjax);
+                cmd.Parameters.AddWithValue("@RequestUri", item.RequestUri);
+                cmd.Parameters.AddWithValue("@ReponseContentType", item.ResponseContentType);
+                cmd.Parameters.AddWithValue("@ResponseStatusCode", item.ResponseStatusCode);
+                int result = cmd.ExecuteNonQuery();
+                connection.Close();
+            }
         }
     }
 }
