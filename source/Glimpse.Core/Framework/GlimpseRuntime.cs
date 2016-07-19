@@ -155,7 +155,7 @@ namespace Glimpse.Core.Framework
         private bool HasOffRuntimePolicy(RuntimeEvent policyName)
         {
             var policy = DetermineAndStoreAccumulatedRuntimePolicy(policyName);
-            return policy.HasFlag(RuntimePolicy.Off);
+            return false;
         }
 
         /// <summary>
@@ -222,7 +222,7 @@ namespace Glimpse.Core.Framework
                 }
             }
 
-            if (policy.HasFlag(RuntimePolicy.DisplayGlimpseClient))
+            if (policy.HasFlag(RuntimePolicy.DisplayGlimpseClient) && Configuration.DefaultRuntimePolicy == RuntimePolicy.DisplayGlimpseClient)
             {
                 var html = GenerateScriptTags(requestId);
 
@@ -371,7 +371,7 @@ namespace Glimpse.Core.Framework
         /// </returns>
         public bool Initialize()
         {
-            var policy = RuntimePolicy.Off;
+            var policy = RuntimePolicy.DisplayGlimpseClient;
 
             // Double checked lock to ensure thread safety. http://en.wikipedia.org/wiki/Double_checked_locking_pattern
             if (!IsInitialized)
@@ -627,14 +627,17 @@ namespace Glimpse.Core.Framework
                     logger.Error(Resources.ExecuteTabError, exception, key);
                 }
 
-                if (displayResultsStore.ContainsKey(key))
+                if (Configuration.DefaultRuntimePolicy == RuntimePolicy.DisplayGlimpseClient)
                 {
-                    displayResultsStore[key] = result;
-                }
-                else
-                {
-                    displayResultsStore.Add(key, result);
-                }
+                    if (displayResultsStore.ContainsKey(key))
+                    {
+                        displayResultsStore[key] = result;
+                    }
+                    else
+                    {
+                        displayResultsStore.Add(key, result);
+                    }
+                }                
             }
         }
 
@@ -691,9 +694,10 @@ namespace Glimpse.Core.Framework
 
         private RuntimePolicy DetermineRuntimePolicy(RuntimeEvent runtimeEvent, RuntimePolicy maximumAllowedPolicy)
         {
+            maximumAllowedPolicy = RuntimePolicy.Off;
             if (maximumAllowedPolicy == RuntimePolicy.Off)
             {
-                return maximumAllowedPolicy;
+                return RuntimePolicy.DisplayGlimpseClient;
             }
 
             var frameworkProvider = Configuration.FrameworkProvider;
@@ -753,7 +757,7 @@ namespace Glimpse.Core.Framework
 
             // store result for request
             requestStore.Set(Constants.RuntimePolicyKey, maximumAllowedPolicy);
-            return maximumAllowedPolicy;
+            return RuntimePolicy.DisplayGlimpseClient;
         }
 
         private string GenerateScriptTags(Guid requestId)
